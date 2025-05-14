@@ -33,26 +33,123 @@ AIRFOIL.NACA64 = xlsread(ROTOR.TurbineInput,'NACA64','A3:D129');           % Tip
 % Simulation options
 SIMULATION.error = 0.01;                                                   % Convergence criteria BEM
 SIMULATION.dt = 0.1;                                                       % Time step [s]
-SIMULATION.time = 0:SIMULATION.dt:100;                                     % Time series [s]
+SIMULATION.time = 0:SIMULATION.dt:300;                                     % Time series [s]
 SIMULATION.taustar_nw = 0.5;                                               % Constants for dynamic inflow model 
 SIMULATION.taustar_fw = 2;                                                 % Constants for dynamic inflow model 
 
+
 %% Solve (steady) BEM
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%
-%%%
-%%% To be completed ...
-%%%
-%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+TSR_range = linspace(1, 15, 50); % Tip Speed Ratio range
+CP_values = zeros(size(TSR_range));
+CT_values = zeros(size(TSR_range));
+
+for i = 1:length(TSR_range)
+    FLOW.omega = TSR_range(i) * FLOW.V0 / ROTOR.R; % Update rotational speed for each TSR
+    [P, T, CP, CT, ~, ~] = function_BEM(ROTOR, AIRFOIL, FLOW, SIMULATION, []);
+    CP_values(i) = CP;
+    CT_values(i) = CT;
+end
+
+% Plot TSR-CP and TSR-CT curves
+figure;
+subplot(2, 1, 1);
+plot(TSR_range, CP_values, 'b-', 'LineWidth', 1.5);
+xlabel('Tip Speed Ratio (TSR)');
+ylabel('Power Coefficient (C_P)');
+%title('TSR vs C_P');
+grid on;
+
+subplot(2, 1, 2);
+plot(TSR_range, CT_values, 'r-', 'LineWidth', 1.5);
+xlabel('Tip Speed Ratio (TSR)');
+ylabel('Thrust Coefficient (C_T)');
+%title('TSR vs C_T');
+grid on;
 
 %% Solve (unsteady) BEM
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%
-%%%
-%%% To be completed ...
-%%%
-%%%
+nSteps = length(SIMULATION.time);
+
+% Floating motion parameters from literature
+A_surge = 8;              f_surge = 1 / 107;    % ±4 m, 107 s period
+A_pitch = 3 * pi/180;     f_pitch = 1 / 32.5;   % ±3 deg, 32.5 s period
+A_yaw   = 3 * pi/180;     f_yaw   = 1 / 80.8;     % ±3 deg, 80.8 s period
+
+% Convert pitch/yaw to linear velocity at rotor radius
+V_surge = A_surge * 2*pi*f_surge * cos(2*pi*f_surge*SIMULATION.time);                    % [m/s]
+V_pitch = ROTOR.R * A_pitch * 2*pi*f_pitch * cos(2*pi*f_pitch*SIMULATION.time);          % [m/s]
+V_yaw   = ROTOR.R * A_yaw   * 2*pi*f_yaw   * cos(2*pi*f_yaw*SIMULATION.time);             % [m/s]
+
+% Initialize storage
+CP_time = zeros(1, nSteps);
+CT_time = zeros(1, nSteps);
+P_time  = zeros(1, nSteps);
+T_time  = zeros(1, nSteps);
+a_hist  = zeros(length(ROTOR.r), nSteps);
+ap_hist = zeros(length(ROTOR.r), nSteps);
+
+% Initial conditions for induction
+PREVIOUSTIME.a_new  = 0.3 * ones(length(ROTOR.r),1);
+PREVIOUSTIME.ap_new = 0.0 * ones(length(ROTOR.r),1);
+
+% Time loop
+for t = 1:nSteps
+    FLOW.V_surge = V_surge(t);
+    FLOW.V_pitch = V_pitch(t);
+    FLOW.V_yaw   = V_yaw(t);
+
+    [P, T, CP, CT, a_new, ap_new] = function_BEM(ROTOR, AIRFOIL, FLOW, SIMULATION, PREVIOUSTIME);
+
+    % Store time history
+    P_time(t)  = P;
+    T_time(t)  = T;
+    CP_time(t) = CP;
+    CT_time(t) = CT;
+    a_hist(:,t)  = a_new;
+    ap_hist(:,t) = ap_new;
+
+    % Update induction history
+    PREVIOUSTIME.a_new  = a_new;
+    PREVIOUSTIME.ap_new = ap_new;
+end
+
+% Plot aerodynamic response to floating motion
+figure;
+subplot(2,1,1);
+plot(SIMULATION.time, P_time/1e6, 'b'); % MW
+xlabel('Time [s]');
+ylabel('Power [MW]');
+%title('Aerodynamic Power Under Floating Motion');
+grid on;
+
+subplot(2,1,2);
+plot(SIMULATION.time, T_time/1e3, 'r'); % kN
+xlabel('Time [s]');
+ylabel('Thrust [kN]');
+%title('Aerodynamic Thrust Under Floating Motion');
+grid on;
+
+
+% Plot surge, pitch, and yaw movements
+figure;
+subplot(3, 1, 1);
+plot(SIMULATION.time, V_surge, 'g', 'LineWidth', 1.5);
+xlabel('Time [s]');
+ylabel('Surge Velocity [m/s]');
+grid on;
+
+subplot(3, 1, 2);
+plot(SIMULATION.time, V_pitch, 'm', 'LineWidth', 1.5);
+xlabel('Time [s]');
+ylabel('Pitch Velocity [m/s]');
+grid on;
+
+subplot(3, 1, 3);
+plot(SIMULATION.time, V_yaw, 'c', 'LineWidth', 1.5);
+xlabel('Time [s]');
+ylabel('Yaw Velocity [m/s]');
+grid on;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
