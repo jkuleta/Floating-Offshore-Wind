@@ -53,11 +53,11 @@ AIRFOIL.NACA64 = xlsread(ROTOR.TurbineInput,'NACA64','A3:D129');           % Tip
 % Simulation options
 SIMULATION.error = 0.01;                                                   % Convergence criteria BEM
 SIMULATION.dt = 0.1;                                                       % Time step [s]
-SIMULATION.time = 0:SIMULATION.dt:100;                                     % Time series [s]
+SIMULATION.time = 0:SIMULATION.dt:300;                                     % Time series [s]
 SIMULATION.taustar_nw = 0.5;                                               % Constants for dynamic inflow model 
 SIMULATION.taustar_fw = 2;                                                 % Constants for dynamic inflow model 
 
-%% State-space solution
+%% State-space solution (TASK 8)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% The equation of motion of this floater-turbine system has the shape:
 %%% (M1+A1)x'' + Bx' + (C1+K1)x = Fext
@@ -67,9 +67,133 @@ SIMULATION.taustar_fw = 2;                                                 % Con
 %%%      C1 is the hydrostatic matrix
 %%%      K1 is the mooring line matrix
 %%%      Fext is the external forces: aerodynamic and the hydrodynamic forces
-%%%
-%%%
-%%% To be completed ...
-%%%
-%%%
+% Initial conditions
+x0 = zeros(6, 1); % Initial states (3 translations and 3 rotations)
+x_dot0 = zeros(6, 1); % Initial velocities
+
+% Time integration
+n = length(SIMULATION.time);
+x = zeros(6, n); % States
+x_dot = zeros(6, n); % Velocities
+x_ddot = zeros(6, n); % Accelerations
+
+% Assign initial conditions
+x(:, 1) = x0;
+x_dot(:, 1) = x_dot0;
+
+% External forces (assumed zero for now)
+Fext = zeros(6, 1);
+
+% Time-stepping loop
+for i = 1:n-1
+    % Effective matrices
+    M_eff = FLOATER.M1 + FLOATER.A1;
+    K_eff = FLOATER.C1 + FLOATER.K11;
+    
+    % Solve for acceleration
+    x_ddot(:, i) = M_eff \ (Fext - FLOATER.B * x_dot(:, i) - K_eff * x(:, i));
+    
+    % Update velocity and position using explicit Euler method
+    x_dot(:, i+1) = x_dot(:, i) + SIMULATION.dt * x_ddot(:, i);
+    x(:, i+1) = x(:, i) + SIMULATION.dt * x_dot(:, i);
+end
+
+% Plot results
+figure;
+subplot(3, 1, 1);
+plot(SIMULATION.time, x(1, :));
+xlabel('Time [s]');
+ylabel('Surge [m]');
+title('Surge Motion');
+
+subplot(3, 1, 2);
+plot(SIMULATION.time, x(2, :));
+xlabel('Time [s]');
+ylabel('Sway [m]');
+title('Sway Motion');
+
+subplot(3, 1, 3);
+plot(SIMULATION.time, x(3, :));
+xlabel('Time [s]');
+ylabel('Heave [m]');
+title('Heave Motion');
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Free Decay Tests (TASK 10)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Initial conditions for free decay tests for all 6 degrees of freedom
+initial_conditions = {
+    'Surge [m]',    [1; 0; 0; 0; 0; 0];  % Initial displacement in surge
+    'Sway [m]',     [0; 1; 0; 0; 0; 0];  % Initial displacement in sway
+    'Heave [m]',    [0; 0; 1; 0; 0; 0];  % Initial displacement in heave
+    'Roll [rad]',     [0; 0; 0; 1; 0; 0];  % Initial displacement in roll
+    'Pitch [rad]',    [0; 0; 0; 0; 1; 0];  % Initial displacement in pitch
+    'Yaw [rad]',      [0; 0; 0; 0; 0; 1];  % Initial displacement in yaw
+};
+
+% Initialize array to store periods
+periods = zeros(length(initial_conditions), 1);
+
+% Initialize state variables
+x = zeros(6, n, length(initial_conditions));
+x_dot = zeros(6, n, length(initial_conditions));
+x_ddot = zeros(6, n, length(initial_conditions));
+
+% Loop through each test to compute motion
+for test = 1:length(initial_conditions)
+    % Extract initial condition
+    x0 = initial_conditions{test, 2};
+    x_dot0 = zeros(6, 1); % Initial velocities
+
+    % Assign initial conditions
+    x(:, 1, test) = x0;
+    x_dot(:, 1, test) = x_dot0;
+
+    % Time-stepping loop
+    for i = 1:n-1
+        % Effective matrices
+        M_eff = FLOATER.M1 + FLOATER.A1;
+        K_eff = FLOATER.C1 + FLOATER.K11;
+
+        % Solve for acceleration
+        x_ddot(:, i, test) = M_eff \ (-FLOATER.B * x_dot(:, i, test) - K_eff * x(:, i, test));
+
+        % Update velocity and position using explicit Euler method
+        x_dot(:, i+1, test) = x_dot(:, i, test) + SIMULATION.dt * x_ddot(:, i, test);
+        x(:, i+1, test) = x(:, i, test) + SIMULATION.dt * x_dot(:, i, test);
+    end
+
+    % Find the period of oscillation for the current test
+    [pks, locs] = findpeaks(x(find(x0, 1), :, test), SIMULATION.time);
+    if length(locs) > 1
+        periods(test) = mean(diff(locs));
+    else
+        % If no peaks are found, take the minimum (crest) and double the amount
+        [~, minIdx] = min(x(find(x0, 1), :, test));
+        periods(test) = 2 * SIMULATION.time(minIdx);
+    end
+end
+
+% Plot results for all tests in a single figure
+figure;
+for test = 1:length(initial_conditions)
+    subplot(2, 3, test);
+    plot(SIMULATION.time, x(find(initial_conditions{test, 2}, 1), :, test));
+    xlabel('Time [s]');
+    ylabel(initial_conditions{test, 1});
+    %title(initial_conditions{test, 1});
+end
+
+% Display the periods for each degree of freedom
+disp('Periods for each degree of freedom:');
+for test = 1:length(initial_conditions)
+    fprintf('%s: %.2f s\n', initial_conditions{test, 1}, periods(test));
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
