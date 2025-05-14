@@ -49,6 +49,11 @@ ap_new = 0*ones(length(ROTOR.r),1);
 a_old = 0.0*ones(length(ROTOR.r),1);
 ap_old = 0*ones(length(ROTOR.r),1);
 
+% Default values if not present
+if ~isfield(FLOW, 'V_surge'); FLOW.V_surge = 0; end
+if ~isfield(FLOW, 'V_pitch'); FLOW.V_pitch = 0; end
+if ~isfield(FLOW, 'V_yaw');   FLOW.V_yaw   = 0; end
+
 iteration = 0;
 
 while sum(abs(a_new-a_old))>SIMULATION.error || ...                        % Condition for convergence
@@ -61,7 +66,8 @@ while sum(abs(a_new-a_old))>SIMULATION.error || ...                        % Con
     ap_old = ap_new;                                                       % Tangential induction factor [-]
     
     % Velocity component
-    Vn = (1-a_new)*FLOW.V0;                                                % Normal velocity (to rotor plane) [m/s]
+    Vn = (1 - a_new) * FLOW.V0 - FLOW.V_surge - FLOW.V_pitch - FLOW.V_yaw; % Normal velocity (to rotor plane) [m/s]
+    %Vn = (1-a_new)*FLOW.V0;                                               % Normal velocity (to rotor plane) [m/s]
     Vt = (1+ap_new)*FLOW.omega.*ROTOR.r;                                   % Tangential velocity (to rotor plane) [m/s]
     Vrel = sqrt(Vn.^2+Vt.^2);                                              % Local relative velocity [m/s]
     
@@ -122,4 +128,5 @@ P = M*FLOW.omega;                                                          % Pow
 CP = P/(1/2*FLOW.rho*FLOW.V0^3*pi*ROTOR.R^2);                              % Power coefficient [-]
 T = ROTOR.B*trapz(ROTOR.r,pn(:));                                          % Thrust [N]
 CT = T/(1/2*FLOW.rho*FLOW.V0^2*pi*ROTOR.R^2);                              % Thrust coefficient [-]   
+
 
