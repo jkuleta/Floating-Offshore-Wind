@@ -57,10 +57,6 @@ SIMULATION.time = 0:SIMULATION.dt:300;                                     % Tim
 SIMULATION.taustar_nw = 0.5;                                               % Constants for dynamic inflow model 
 SIMULATION.taustar_fw = 2;                                                 % Constants for dynamic inflow model 
 
-% Previous time for BEM
-PREVIOUSTIME.a_new = 0; % Initialize previous time array
-PREVIOUSTIME.ap_new = 0; % Initialize previous time array
-
 %% State-space solution (TASK 8)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% The equation of motion of this floater-turbine system has the shape:
@@ -93,6 +89,9 @@ for i = 1:n-1
     % Effective matrices
     M_eff = FLOATER.M1 + FLOATER.A1;
     K_eff = FLOATER.C1 + FLOATER.K11;
+
+    Fext_hydro = FLOATER.Fhydrodynamic * WAVES.WA * cos(WAVES.k*x(1,i) - WAVES.omega * SIMULATION.time(i)- FLOATER.Fhydrodynamicphase);
+    
     
     % Solve for acceleration
     x_ddot(:, i) = M_eff \ (Fext - FLOATER.B * x_dot(:, i) - K_eff * x(:, i));
@@ -102,25 +101,22 @@ for i = 1:n-1
     x(:, i+1) = x(:, i) + SIMULATION.dt * x_dot(:, i);
 end
 
-disp("Check for 0 displacement oscillation./n");
-
 % Plot results
 figure;
 subplot(3, 1, 1);
-plot(SIMULATION.time, x(1, :), "LineWidth", 1.5);
+plot(SIMULATION.time, x(1, :));
 xlabel('Time [s]');
 ylabel('Surge [m]');
 title('Surge Motion');
-grid on;
 
 subplot(3, 1, 2);
-plot(SIMULATION.time, x(2, :), "LineWidth", 1.5);
+plot(SIMULATION.time, x(2, :));
 xlabel('Time [s]');
 ylabel('Sway [m]');
 title('Sway Motion');
 
 subplot(3, 1, 3);
-plot(SIMULATION.time, x(3, :),  "LineWidth", 1.5);
+plot(SIMULATION.time, x(3, :));
 xlabel('Time [s]');
 ylabel('Heave [m]');
 title('Heave Motion');
@@ -147,8 +143,6 @@ periods = zeros(length(initial_conditions), 1);
 x = zeros(6, n, length(initial_conditions));
 x_dot = zeros(6, n, length(initial_conditions));
 x_ddot = zeros(6, n, length(initial_conditions));
-
-fprintf("Running free-decay tests...");
 
 % Loop through each test to compute motion
 for test = 1:length(initial_conditions)
@@ -189,14 +183,11 @@ end
 figure;
 for test = 1:length(initial_conditions)
     subplot(2, 3, test);
-    plot(SIMULATION.time, x(find(initial_conditions{test, 2}, 1), :, test),'LineWidth', 1.5);
-    grid on;
+    plot(SIMULATION.time, x(find(initial_conditions{test, 2}, 1), :, test));
     xlabel('Time [s]');
     ylabel(initial_conditions{test, 1});
     %title(initial_conditions{test, 1});
 end
-
-fprintf("Completed!\n");
 
 % Display the periods for each degree of freedom
 disp('Periods for each degree of freedom:');
@@ -204,67 +195,8 @@ for test = 1:length(initial_conditions)
     fprintf('%s: %.2f s\n', initial_conditions{test, 1}, periods(test));
 end
 
-%% TASK 10 - HYDRO + AERO LOADS
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-x0 = zeros(6, 1); % Initial states (3 translations and 3 rotations)
-x_dot0 = zeros(6, 1); % Initial velocities
 
-% Time integration
-n = length(SIMULATION.time);
-x = zeros(6, n); % States
-x_dot = zeros(6, n); % Velocities
-x_ddot = zeros(6, n); % Accelerations
 
-% Assign initial conditions
-x(:, 1) = x0;
-x_dot(:, 1) = x_dot0;
 
-% External forces (assumed zero for now)
-Fext = zeros(6, 1);
-
-fprintf("Running with aero/hydro loads...");
-
-% Time-stepping loop
-for i = 1:n-1
-    % Effective matrices
-    M_eff = FLOATER.M1 + FLOATER.A1;
-    K_eff = FLOATER.C1 + FLOATER.K11;
-
-    % hydordynamic forces
-    Fext_hydro = FLOATER.Fhydrodynamic.* WAVES.WA .* cos(WAVES.k*x(1,i) - WAVES.omega .* SIMULATION.time(i)- FLOATER.Fhydrodynamicphase(1));
-
-    % aerodynamic forces
-    [Power, Thrust, CP, CT, PREVIOUSTIME.a_new, PREVIOUSTIME.ap_new] = function_BEM(ROTOR, AIRFOIL, FLOW, SIMULATION, PREVIOUSTIME);
-    Forces_aero = [Thrust * cos(x(5,i)) * cos(x(end, i)); ... % Surge 
-                   Thrust * sin(x(5,i)) * cos(x(end, i)); ... % Sway
-                   -Thrust * sin(x(end, i)); ]; % Heave
-
-    arm = [x(1,i); x(2,i); 90]; % Position vector (surge, sway, 90)
-    Moment_aero = cross(arm, Forces_aero);
-
-    Fext_aero = [Forces_aero; Moment_aero];
-
-    % combined external loads
-    Fext = Fext_hydro' + Fext_aero;
-
-    % Solve for acceleration
-    x_ddot(:, i) = M_eff \ (Fext - FLOATER.B * x_dot(:, i) - K_eff * x(:, i));
-    
-    % Update velocity and position using explicit Euler method
-    x_dot(:, i+1) = x_dot(:, i) + SIMULATION.dt * x_ddot(:, i);
-    x(:, i+1) = x(:, i) + SIMULATION.dt * x_dot(:, i);
-end
-
-fprintf('Completed!\n');
-
-figure;
-dof_labels = {'Surge [m]', 'Sway [m]', 'Heave [m]', 'Roll [rad]', 'Pitch [rad]', 'Yaw [rad]'};
-for j = 1:6
-    subplot(3,2,j);
-    plot(SIMULATION.time, x(j,:), 'LineWidth', 1.5);
-    xlabel('Time [s]');
-    ylabel(dof_labels{j});
-    title(dof_labels{j});
-    grid on;
-end
-sgtitle('Time Series Response of Each Degree of Freedom');
