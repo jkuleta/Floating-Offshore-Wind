@@ -53,7 +53,7 @@ AIRFOIL.NACA64 = xlsread(ROTOR.TurbineInput,'NACA64','A3:D129');           % Tip
 % Simulation options
 SIMULATION.error = 0.01;                                                   % Convergence criteria BEM
 SIMULATION.dt = 0.1;                                                       % Time step [s]
-SIMULATION.time = 0:SIMULATION.dt:300;                                     % Time series [s]
+SIMULATION.time = 0:SIMULATION.dt:600;                                     % Time series [s]
 SIMULATION.taustar_nw = 0.5;                                               % Constants for dynamic inflow model 
 SIMULATION.taustar_fw = 2;                                                 % Constants for dynamic inflow model 
 
@@ -268,3 +268,13 @@ for j = 1:6
     grid on;
 end
 sgtitle('Time Series Response of Each Degree of Freedom');
+
+RESULTS.Time = SIMULATION.time;
+RESULTS.Surge = x(1,:);
+RESULTS.Sway = x(2,:);
+RESULTS.Heave = x(3,:);
+RESULTS.Roll = x(4,:);
+RESULTS.Pitch = x(5,:);
+RESULTS.Yaw = x(6,:);
+
+save('RESULTS_S4.mat', 'RESULTS');
