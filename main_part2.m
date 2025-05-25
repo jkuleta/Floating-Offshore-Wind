@@ -270,8 +270,8 @@ for i = 1:n-1
     
     % Calculate aerodynamic forces
 
-    R_z = [cosd(x(6,i)), -sind(x(6,i)), 0; ...
-             sind(x(6,i)), cosd(x(6,i)), 0; ...
+    R_z = [cos(x(6,i)), -sin(x(6,i)), 0; ...
+             sin(x(6,i)), cos(x(6,i)), 0; ...
              0, 0, 1]; % Rotation matrix for yaw
 
     
@@ -288,7 +288,7 @@ for i = 1:n-1
     Forces_aero = R * [Thrust(i); 0; 0];
 
     arm = R*[0; 0; ROTOR.H]; % Position vector (surge, sway, 90)
-    Moment_aero = cross(Forces_aero, arm); % Moment due to aerodynamic forces
+    Moment_aero = cross(arm, Forces_aero); % Moment due to aerodynamic forces
     
     Fext_aero = [Forces_aero; Moment_aero];
 
@@ -301,6 +301,11 @@ for i = 1:n-1
     % Update velocity and position using explicit Euler method
     x_dot(:, i+1) = x_dot(:, i) + SIMULATION.dt * x_ddot(:, i);
     x(:, i+1) = x(:, i) + SIMULATION.dt * x_dot(:, i);
+
+    % Pass floater velocities
+    FLOW.V_surge = x_dot(1, i+1);
+    FLOW.V_pitch = ROTOR.H * x_dot(5, i+1); % Linear velocity at rotor radius due to pitch 
+    FLOW.V_yaw   = ROTOR.H * sin(x(6, i+1)); % Linear velocity at rotor radius due to yaw
 end
 
 fprintf('Completed!\n');
