@@ -88,12 +88,12 @@ x_dot(:, 1) = x_dot0;
 % External forces (assumed zero for now)
 Fext = zeros(6, 1);
 
+% Effective matrices
+M_eff = FLOATER.M1 + FLOATER.A1;
+K_eff = FLOATER.C1 + FLOATER.K11;
+
 % Time-stepping loop
 for i = 1:n-1
-    % Effective matrices
-    M_eff = FLOATER.M1 + FLOATER.A1;
-    K_eff = FLOATER.C1 + FLOATER.K11;
-    
     % Solve for acceleration
     x_ddot(:, i) = M_eff \ (Fext - FLOATER.B * x_dot(:, i) - K_eff * x(:, i));
     
@@ -102,7 +102,7 @@ for i = 1:n-1
     x(:, i+1) = x(:, i) + SIMULATION.dt * x_dot(:, i);
 end
 
-disp("Check for 0 displacement oscillation./n");
+fprintf("Check for 0 displacement oscillation.\n");
 
 % Plot results
 figure;
@@ -142,6 +142,8 @@ initial_conditions = {
 
 % Initialize array to store periods
 periods = zeros(length(initial_conditions), 1);
+damping_linear = zeros(length(initial_conditions), 1);
+damping_quadratic = zeros(length(initial_conditions), 1);
 
 % Initialize state variables
 x = zeros(6, n, length(initial_conditions));
@@ -149,6 +151,7 @@ x_dot = zeros(6, n, length(initial_conditions));
 x_ddot = zeros(6, n, length(initial_conditions));
 
 fprintf("Running free-decay tests...");
+
 
 % Loop through each test to compute motion
 for test = 1:length(initial_conditions)
@@ -162,10 +165,6 @@ for test = 1:length(initial_conditions)
 
     % Time-stepping loop
     for i = 1:n-1
-        % Effective matrices
-        M_eff = FLOATER.M1 + FLOATER.A1;
-        K_eff = FLOATER.C1 + FLOATER.K11;
-
         % Solve for acceleration
         x_ddot(:, i, test) = M_eff \ (-FLOATER.B * x_dot(:, i, test) - K_eff * x(:, i, test));
 
@@ -183,6 +182,25 @@ for test = 1:length(initial_conditions)
         [~, minIdx] = min(x(find(x0, 1), :, test));
         periods(test) = 2 * SIMULATION.time(minIdx);
     end
+
+
+    % Use only peaks for damping estimation, use only first 5 peaks or less
+    % Add artificial peak at time 0 with amplitude 1
+    eta_peaks = [1; pks(:)];
+    t_peaks = [0; locs(:)];
+    if length(eta_peaks) > 9
+        eta_peaks = eta_peaks(1:9);
+        t_peaks = t_peaks(1:9);
+    end
+
+    % Logarithmic decrement for linear damping estimation
+    if length(eta_peaks) > 2
+        deltas = log(eta_peaks(1:end-1) ./ eta_peaks(2:end));
+        delta_mean = mean(deltas);
+        damping_linear(test) = delta_mean / sqrt(4*pi^2 + delta_mean^2);
+    else
+        damping_linear(test) = NaN;
+    end
 end
 
 % Plot results for all tests in a single figure
@@ -198,15 +216,23 @@ end
 
 fprintf("Completed!\n");
 
-% Display the periods for each degree of freedom
-disp('Periods for each degree of freedom:');
+% Display the periods and damping coefficients for each degree of freedom in one line
+disp('Periods and damping coefficients for each degree of freedom:');
 for test = 1:length(initial_conditions)
-    fprintf('%s: %.2f s\n', initial_conditions{test, 1}, periods(test));
+    fprintf('%s: Period = %.2f s, Linear Damping = %.4f, Quadratic Damping = %.4f\n', ...
+        initial_conditions{test, 1}, periods(test), damping_linear(test), damping_quadratic(test));
 end
+
+%error("STOP HERE!"); % Stop execution here to check the results
 
 %% TASK 10 - HYDRO + AERO LOADS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-x0 = zeros(6, 1); % Initial states (3 translations and 3 rotations)
+
+load('OUTPUT_S4.mat') % Load OpenFAST output data
+hydro_from_FAST = true; % Set to true if using OpenFAST data
+
+
+x0 = [5.11; 0; 0; 0; 0.03; 0]; % Initial states (3 translations and 3 rotations)
 x_dot0 = zeros(6, 1); % Initial velocities
 
 % Time integration
@@ -214,6 +240,9 @@ n = length(SIMULATION.time);
 x = zeros(6, n); % States
 x_dot = zeros(6, n); % Velocities
 x_ddot = zeros(6, n); % Accelerations
+
+Thrust = zeros(1, n);
+Power = zeros(1, n);
 
 % Assign initial conditions
 x(:, 1) = x0;
@@ -226,26 +255,45 @@ fprintf("Running with aero/hydro loads...");
 
 % Time-stepping loop
 for i = 1:n-1
-    % Effective matrices
-    M_eff = FLOATER.M1 + FLOATER.A1;
-    K_eff = FLOATER.C1 + FLOATER.K11;
-
     % hydordynamic forces
-    Fext_hydro = FLOATER.Fhydrodynamic.* WAVES.WA .* cos(WAVES.k*x(1,i) - WAVES.omega .* SIMULATION.time(i)- FLOATER.Fhydrodynamicphase(1));
+    if hydro_from_FAST
+            Fext_hydro = [OUTPUT.B1WvsFxi(i); OUTPUT.B1WvsFyi(i); OUTPUT.B1WvsFzi(i); ...
+            OUTPUT.B1WvsMxi(i); OUTPUT.B1WvsMyi(i); OUTPUT.B1WvsMzi(i)];
+    else
+        Fext_hydro = FLOATER.Fhydrodynamic.* WAVES.WA .* cos(WAVES.k*x(1,i) - WAVES.omega .* SIMULATION.time(i)- FLOATER.Fhydrodynamicphase);
+        Fext_hydro = Fext_hydro';
+    end
+
 
     % aerodynamic forces
-    [Power, Thrust, CP, CT, PREVIOUSTIME.a_new, PREVIOUSTIME.ap_new] = function_BEM(ROTOR, AIRFOIL, FLOW, SIMULATION, PREVIOUSTIME);
-    Forces_aero = [Thrust * cos(x(5,i)) * cos(x(end, i)); ... % Surge 
-                   Thrust * sin(x(5,i)) * cos(x(end, i)); ... % Sway
-                   -Thrust * sin(x(end, i)); ]; % Heave
+    [Power(i), Thrust(i), CP, CT, PREVIOUSTIME.a_new, PREVIOUSTIME.ap_new] = function_BEM(ROTOR, AIRFOIL, FLOW, SIMULATION, PREVIOUSTIME);
+    
+    % Calculate aerodynamic forces
 
-    arm = [x(1,i); x(2,i); 90]; % Position vector (surge, sway, 90)
-    Moment_aero = cross(arm, Forces_aero);
+    R_z = [cosd(x(6,i)), -sind(x(6,i)), 0; ...
+             sind(x(6,i)), cosd(x(6,i)), 0; ...
+             0, 0, 1]; % Rotation matrix for yaw
 
+    
+    R_y = [cos(x(5,i)), 0, sin(x(5,i));
+            0, 1, 0;
+            -sin(x(5,i)), 0, cos(x(5,i))]; % Rotation matrix for pitch
+    
+    R_x = [1 0 0;
+            0 cos(x(4,i)) -sin(x(4,i));
+            0 sin(x(4,i)) cos(x(4,i))]; % Rotation matrix for roll
+
+    R = R_z * R_y * R_x; % Combined rotation matrix
+
+    Forces_aero = R * [Thrust(i); 0; 0];
+
+    arm = R*[0; 0; ROTOR.H]; % Position vector (surge, sway, 90)
+    Moment_aero = cross(Forces_aero, arm); % Moment due to aerodynamic forces
+    
     Fext_aero = [Forces_aero; Moment_aero];
 
     % combined external loads
-    Fext = Fext_hydro' + Fext_aero;
+    Fext = Fext_hydro + Fext_aero;
 
     % Solve for acceleration
     x_ddot(:, i) = M_eff \ (Fext - FLOATER.B * x_dot(:, i) - K_eff * x(:, i));
@@ -333,3 +381,22 @@ grid on;
 xlabel('Time [s]');
 ylabel('Yaw [rad]');
 title('Yaw');
+
+figure;
+subplot(2,1,1);
+plot(OUTPUT.Time, OUTPUT.RtAeroFxh, 'LineWidth', 1.5); hold on;
+plot(SIMULATION.time, Thrust, 'LineWidth', 1.5);
+grid on;
+xlabel('Time [s]');
+ylabel('Thrust [N]');
+title('Thrust');
+legend('OpenFAST', 'Own code');
+
+subplot(2,1,2);
+plot(OUTPUT.Time, OUTPUT.RtAeroMxh, 'LineWidth', 1.5); hold on;
+plot(SIMULATION.time, Power, 'LineWidth', 1.5);
+grid on;
+xlabel('Time [s]');
+ylabel('Power [W]');
+title('Power');
+legend('OpenFAST', 'Own code');

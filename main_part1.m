@@ -44,6 +44,7 @@ TSR_range = linspace(1, 15, 50); % Tip Speed Ratio range
 CP_values = zeros(size(TSR_range));
 CT_values = zeros(size(TSR_range));
 
+
 for i = 1:length(TSR_range)
     FLOW.omega = TSR_range(i) * FLOW.V0 / ROTOR.R; % Update rotational speed for each TSR
     [P, T, CP, CT, ~, ~] = function_BEM(ROTOR, AIRFOIL, FLOW, SIMULATION, []);
@@ -72,14 +73,14 @@ grid on;
 nSteps = length(SIMULATION.time);
 
 % Floating motion parameters from literature
-A_surge = 8;              f_surge = 1 / 107;    % ±4 m, 107 s period
+A_surge = 4;              f_surge = 1 / 107;    % ±4 m, 107 s period
 A_pitch = 3 * pi/180;     f_pitch = 1 / 32.5;   % ±3 deg, 32.5 s period
 A_yaw   = 3 * pi/180;     f_yaw   = 1 / 80.8;     % ±3 deg, 80.8 s period
 
 % Convert pitch/yaw to linear velocity at rotor radius
 V_surge = A_surge * 2*pi*f_surge * cos(2*pi*f_surge*SIMULATION.time);                    % [m/s]
-V_pitch = ROTOR.R * A_pitch * 2*pi*f_pitch * cos(2*pi*f_pitch*SIMULATION.time);          % [m/s]
-V_yaw   = ROTOR.R * A_yaw   * 2*pi*f_yaw   * cos(2*pi*f_yaw*SIMULATION.time);             % [m/s]
+V_pitch = ROTOR.H * A_pitch * 2*pi*f_pitch * cos(2*pi*f_pitch*SIMULATION.time);          % [m/s]  %Wrong rotor arm
+V_yaw   = ROTOR.H * sin(A_yaw   * 2*pi*f_yaw * cos(2*pi*f_yaw*SIMULATION.time));             % [m/s] %wrong calculation
 
 % Initialize storage
 CP_time = zeros(1, nSteps);
@@ -92,6 +93,8 @@ ap_hist = zeros(length(ROTOR.r), nSteps);
 % Initial conditions for induction
 PREVIOUSTIME.a_new  = 0.3 * ones(length(ROTOR.r),1);
 PREVIOUSTIME.ap_new = 0.0 * ones(length(ROTOR.r),1);
+
+FLOW.omega = 9*2*pi/60; 
 
 % Time loop
 for t = 1:nSteps
@@ -114,21 +117,29 @@ for t = 1:nSteps
     PREVIOUSTIME.ap_new = ap_new;
 end
 
+[P, T, CP, CT, ~, ~] = function_BEM(ROTOR, AIRFOIL, FLOW, SIMULATION, PREVIOUSTIME);
+
 % Plot aerodynamic response to floating motion
 figure;
 subplot(2,1,1);
-plot(SIMULATION.time, P_time/1e6, 'b'); % MW
+plot(SIMULATION.time, P_time/1e6, 'b', 'LineWidth',1.5); % MW
+hold on;% MW
+plot(SIMULATION.time, (P/1e6)*ones(length(SIMULATION.time)), 'k--', 'LineWidth',1.5); % kN
 xlabel('Time [s]');
 ylabel('Power [MW]');
 %title('Aerodynamic Power Under Floating Motion');
 grid on;
+legend('With floating motion', 'No motion','Location', 'Best');
 
 subplot(2,1,2);
-plot(SIMULATION.time, T_time/1e3, 'r'); % kN
+plot(SIMULATION.time, T_time/1e3, 'r', 'LineWidth',1.5); % kN
+hold on;
+plot(SIMULATION.time, (T/1e3)*ones(length(SIMULATION.time)), 'k--', 'LineWidth',1.5); % kN
 xlabel('Time [s]');
 ylabel('Thrust [kN]');
 %title('Aerodynamic Thrust Under Floating Motion');
 grid on;
+legend('With floating motion', 'No motion','Location', 'Best');
 
 
 % Plot surge, pitch, and yaw movements
