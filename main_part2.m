@@ -7,8 +7,8 @@ FLOW.rho = 1.225;                                                          % Air
 FLOW.omega = 9*2*pi/60;                                                    % Rotational speed [rad/s]
 
 % Waves
-WAVES.H = 2.44;                                                            % Wave height [m]
-WAVES.T = 8.1;                                                             % Wave period [s]
+WAVES.H = 5.49;                                                            % Wave height [m]
+WAVES.T = 11.3;                                                             % Wave period [s]
 WAVES.d = 200;                                                             % Water depth (positive) [m]
 WAVES.WA = WAVES.H/2;                                                      % Wave amplitude [m]
 WAVES.omega = 2*pi/WAVES.T;                                                % Wave frequency [rad/s]
@@ -228,7 +228,7 @@ end
 %% TASK 10 - HYDRO + AERO LOADS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-load('OUTPUT_S4.mat') % Load OpenFAST output data
+load('OUTPUT_S6.mat') % Load OpenFAST output data
 hydro_from_FAST = true; % Set to true if using OpenFAST data
 
 
