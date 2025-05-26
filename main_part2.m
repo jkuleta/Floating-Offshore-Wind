@@ -6,9 +6,65 @@ FLOW.V0 = 10;                                                              % Inf
 FLOW.rho = 1.225;                                                          % Air density [kg/m2]
 FLOW.omega = 9*2*pi/60;                                                    % Rotational speed [rad/s]
 
-% Waves
-WAVES.H = 5.49;                                                            % Wave height [m]
-WAVES.T = 11.3;                                                             % Wave period [s]
+% Waves - computed later baed on the sea-state
+sea_state = input(['Enter the number of the sea state to use (1-8):\n' ...
+    '1: H=0.09m, T=2.0s\n' ...
+    '2: H=0.67m, T=4.8s\n' ...
+    '3: H=1.40m, T=6.5s\n' ...
+    '4: H=2.44m, T=8.1s\n' ...
+    '5: H=3.66m, T=9.7s\n' ...
+    '6: H=5.49m, T=11.3s\n' ...
+    '7: H=9.14m, T=13.6s\n' ...
+    '8: H=15.24m, T=17s\n' ...
+    'Your choice: ']);
+fprintf('Selected sea state: %d\n', sea_state);
+
+if sea_state == 1
+    load('OUTPUT_S1.mat');
+    WAVES.H = 0.09;                                                            % Wave height [m]
+    WAVES.T = 2.0;                                                             % Wave period [s]
+elseif sea_state == 2
+    load('OUTPUT_S2.mat');
+    WAVES.H = 0.67;
+    WAVES.T = 4.8;
+elseif sea_state == 3
+    load('OUTPUT_S3.mat');
+    WAVES.H = 1.40;                                                            % Wave height [m]
+    WAVES.T = 6.5;
+elseif sea_state == 4
+    load('OUTPUT_S4.mat');
+    WAVES.H = 2.44;                                                            % Wave height [m]
+    WAVES.T = 8.1;  
+elseif sea_state == 5
+    load('OUTPUT_S5.mat');
+    WAVES.H = 3.66;                                                            % Wave height [m]
+    WAVES.T = 9.7;      
+elseif sea_state == 6
+    load('OUTPUT_S6.mat');
+    WAVES.H = 5.49;                                                            % Wave height [m]
+    WAVES.T = 11.3;
+elseif sea_state == 7
+    load('OUTPUT_S7.mat');
+    WAVES.H = 9.14;                                                            % Wave height [m]
+    WAVES.T = 13.6;
+elseif sea_state == 8
+    load('OUTPUT_S8.mat');
+    WAVES.H = 15.24;                                                            % Wave height [m]
+    WAVES.T = 17;% Wave height [m]
+else
+    error('Invalid sea state selected. Please choose below 8.');
+end
+
+use_fast = input('Do you want to use hydrodynamic data from OpenFAST? (y/n): ', 's');
+if strcmpi(use_fast, 'y')
+    hydro_from_FAST = true;
+    disp("Using hydrodynamic data from OpenFAST.");
+else
+    hydro_from_FAST = false;
+    disp("Own hydrodynamic model will be used.");
+end
+
+
 WAVES.d = 200;                                                             % Water depth (positive) [m]
 WAVES.WA = WAVES.H/2;                                                      % Wave amplitude [m]
 WAVES.omega = 2*pi/WAVES.T;                                                % Wave frequency [rad/s]
@@ -227,12 +283,7 @@ end
 
 %% TASK 10 - HYDRO + AERO LOADS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-load('OUTPUT_S6.mat') % Load OpenFAST output data
-hydro_from_FAST = true; % Set to true if using OpenFAST data
-
-
-x0 = [5.11; 0; 0; 0; 0.03; 0]; % Initial states (3 translations and 3 rotations)
+x0 = [5.1; 0; 0; 0.03; 0; 0]; % Initial states (3 translations and 3 rotations)
 x_dot0 = zeros(6, 1); % Initial velocities
 
 % Time integration
@@ -330,8 +381,6 @@ RESULTS.Roll = x(4,:);
 RESULTS.Pitch = x(5,:);
 RESULTS.Yaw = x(6,:);
 
-load("OUTPUT_S4.mat")
-
 figure;
 subplot(3,2,1);
 plot(OUTPUT.Time, OUTPUT.B1Surge, 'LineWidth', 1.5); hold on;
@@ -361,30 +410,30 @@ ylabel('Heave [m]');
 title('Heave');
 
 subplot(3,2,4);
-plot(OUTPUT.Time, OUTPUT.B1Roll, 'LineWidth', 1.5); hold on;
-plot(RESULTS.Time, RESULTS.Roll, 'LineWidth', 1.5);
+plot(OUTPUT.Time, rad2deg(OUTPUT.B1Roll), 'LineWidth', 1.5); hold on;
+plot(RESULTS.Time, rad2deg(RESULTS.Roll), 'LineWidth', 1.5);
 legend('OpenFAST', 'Own code');
 grid on;
 xlabel('Time [s]');
-ylabel('Roll [rad]');
+ylabel('Roll [deg]');
 title('Roll');
 
 subplot(3,2,5);
-plot(OUTPUT.Time, OUTPUT.B1Pitch, 'LineWidth', 1.5); hold on;
-plot(RESULTS.Time, RESULTS.Pitch, 'LineWidth', 1.5);
+plot(OUTPUT.Time, rad2deg(OUTPUT.B1Pitch), 'LineWidth', 1.5); hold on;
+plot(RESULTS.Time, rad2deg(RESULTS.Pitch), 'LineWidth', 1.5);
 legend('OpenFAST', 'Own code');
 grid on;
 xlabel('Time [s]');
-ylabel('Pitch [rad]');
+ylabel('Pitch [deg]');
 title('Pitch');
 
 subplot(3,2,6);
-plot(OUTPUT.Time, OUTPUT.B1Yaw, 'LineWidth', 1.5); hold on;
-plot(RESULTS.Time, RESULTS.Yaw, 'LineWidth', 1.5);
+plot(OUTPUT.Time, rad2deg(OUTPUT.B1Yaw), 'LineWidth', 1.5); hold on;
+plot(RESULTS.Time, rad2deg(RESULTS.Yaw), 'LineWidth', 1.5);
 legend('OpenFAST', 'Own code');
 grid on;
 xlabel('Time [s]');
-ylabel('Yaw [rad]');
+ylabel('Yaw [deg]');
 title('Yaw');
 
 figure;
