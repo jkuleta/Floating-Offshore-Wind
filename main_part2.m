@@ -311,7 +311,7 @@ for i = 1:n-1
             Fext_hydro = [OUTPUT.B1WvsFxi(i); OUTPUT.B1WvsFyi(i); OUTPUT.B1WvsFzi(i); ...
             OUTPUT.B1WvsMxi(i); OUTPUT.B1WvsMyi(i); OUTPUT.B1WvsMzi(i)];
     else
-        Fext_hydro = FLOATER.Fhydrodynamic.* WAVES.WA .* cos(WAVES.k*x(1,i) - WAVES.omega .* SIMULATION.time(i)- FLOATER.Fhydrodynamicphase);
+        Fext_hydro = FLOATER.Fhydrodynamic.* WAVES.WA .* cos(WAVES.k*x(1,i) - WAVES.omega .* SIMULATION.time(i)- deg2rad(FLOATER.Fhydrodynamicphase));
         Fext_hydro = Fext_hydro';
     end
 
@@ -356,7 +356,7 @@ for i = 1:n-1
     % Pass floater velocities
     FLOW.V_surge = x_dot(1, i+1);
     FLOW.V_pitch = ROTOR.H * x_dot(5, i+1); % Linear velocity at rotor radius due to pitch 
-    FLOW.V_yaw   = ROTOR.H * sin(x(6, i+1)); % Linear velocity at rotor radius due to yaw
+    FLOW.V_yaw   = ROTOR.H * x_dot(6, i+1); % Linear velocity at rotor radius due to yaw
 end
 
 fprintf('Completed!\n');
@@ -380,72 +380,77 @@ RESULTS.Heave = x(3,:);
 RESULTS.Roll = x(4,:);
 RESULTS.Pitch = x(5,:);
 RESULTS.Yaw = x(6,:);
+RESULTS.Thrust = Thrust;
+RESULTS.Power = Power;
 
-figure;
-subplot(3,2,1);
-plot(OUTPUT.Time, OUTPUT.B1Surge, 'LineWidth', 1.5); hold on;
-plot(RESULTS.Time, RESULTS.Surge, 'LineWidth', 1.5);
+%% First Figure: Motion Comparison
+figure('Position',[100 100 700 700]);  % Increase figure height and width
+
+% Adjust subplot positions manually for vertical spacing
+subplot(3,1,1);
+h1 = plot(OUTPUT.Time, OUTPUT.B1Surge, 'LineWidth', 1.5); hold on;
+h2 = plot(RESULTS.Time, RESULTS.Surge, 'LineWidth', 1.5);
 grid on;
-legend('OpenFAST', 'Own code');
 xlabel('Time [s]');
 ylabel('Surge [m]');
 title('Surge');
+set(gca, 'FontSize', 12);
+pos1 = get(gca,'Position'); % Save position for adjustment
 
-subplot(3,2,2);
-plot(OUTPUT.Time, OUTPUT.B1Sway, 'LineWidth', 1.5); hold on;
-plot(RESULTS.Time, RESULTS.Sway, 'LineWidth', 1.5);
-grid on;
-legend('OpenFAST', 'Own code');
-xlabel('Time [s]');
-ylabel('Sway [m]');
-title('Sway');
-
-subplot(3,2,3);
+subplot(3,1,2);
 plot(OUTPUT.Time, OUTPUT.B1Heave, 'LineWidth', 1.5); hold on;
 plot(RESULTS.Time, RESULTS.Heave, 'LineWidth', 1.5);
-legend('OpenFAST', 'Own code');
 grid on;
 xlabel('Time [s]');
 ylabel('Heave [m]');
 title('Heave');
+set(gca, 'FontSize', 12);
+pos2 = get(gca,'Position');
 
-subplot(3,2,4);
-plot(OUTPUT.Time, rad2deg(OUTPUT.B1Roll), 'LineWidth', 1.5); hold on;
-plot(RESULTS.Time, rad2deg(RESULTS.Roll), 'LineWidth', 1.5);
-legend('OpenFAST', 'Own code');
-grid on;
-xlabel('Time [s]');
-ylabel('Roll [deg]');
-title('Roll');
-
-subplot(3,2,5);
+subplot(3,1,3);
 plot(OUTPUT.Time, rad2deg(OUTPUT.B1Pitch), 'LineWidth', 1.5); hold on;
 plot(RESULTS.Time, rad2deg(RESULTS.Pitch), 'LineWidth', 1.5);
-legend('OpenFAST', 'Own code');
 grid on;
 xlabel('Time [s]');
 ylabel('Pitch [deg]');
 title('Pitch');
+set(gca, 'FontSize', 12);
+pos3 = get(gca,'Position');
 
-subplot(3,2,6);
-plot(OUTPUT.Time, rad2deg(OUTPUT.B1Yaw), 'LineWidth', 1.5); hold on;
-plot(RESULTS.Time, rad2deg(RESULTS.Yaw), 'LineWidth', 1.5);
-legend('OpenFAST', 'Own code');
-grid on;
-xlabel('Time [s]');
-ylabel('Yaw [deg]');
-title('Yaw');
+% Adjust subplot vertical positions to add space at bottom for legend
+gap = 0.03;  % vertical gap for legend area
 
-figure;
+set(gca, 'Position', [pos3(1) pos3(2)+gap pos3(3) pos3(4)-gap]);
+subplot(3,1,2);
+set(gca, 'Position', [pos2(1) pos2(2)+gap pos2(3) pos2(4)-gap]);
+subplot(3,1,1);
+set(gca, 'Position', [pos1(1) pos1(2)+gap pos1(3) pos1(4)-gap]);
+
+% Add legend below the last subplot with normalized figure units
+legend([h1, h2], {'OpenFAST', 'Own code'}, 'Orientation', 'horizontal', ...
+    'Units', 'normalized', 'Position', [0.35 0.02 0.3 0.04]);
+
+% Save figure
+saveas(gcf, 'Task 12 - MotionComparison_S8.png');
+
+
+
+%% Second Figure: Aero Forces Comparison
+figure('Position',[100 100 900 600]);  % Increase figure height and width
+
+% Plot Thrust
 subplot(2,1,1);
-plot(OUTPUT.Time, OUTPUT.RtAeroFxh, 'LineWidth', 1.5); hold on;
-plot(SIMULATION.time, Thrust, 'LineWidth', 1.5);
+h1 = plot(OUTPUT.Time, OUTPUT.RtAeroFxh, 'LineWidth', 1.5); hold on;
+h2 = plot(SIMULATION.time, Thrust, 'LineWidth', 1.5);
 grid on;
 xlabel('Time [s]');
 ylabel('Thrust [N]');
 title('Thrust');
-legend('OpenFAST', 'Own code');
+xlim([0 599]);
+set(gca, 'FontSize', 12);
+pos1 = get(gca,'Position');
 
+% Plot Power
 subplot(2,1,2);
 plot(OUTPUT.Time, OUTPUT.RtAeroMxh, 'LineWidth', 1.5); hold on;
 plot(SIMULATION.time, Power, 'LineWidth', 1.5);
@@ -453,4 +458,26 @@ grid on;
 xlabel('Time [s]');
 ylabel('Power [W]');
 title('Power');
-legend('OpenFAST', 'Own code');
+xlim([0 599]);
+set(gca, 'FontSize', 12);
+pos2 = get(gca,'Position');
+
+% Adjust subplot positions to leave room for legend
+gap = 0.04;  % vertical gap for legend area
+
+set(gca, 'Position', [pos2(1) pos2(2)+gap pos2(3) pos2(4)-gap]);
+subplot(2,1,1);
+set(gca, 'Position', [pos1(1) pos1(2)+gap pos1(3) pos1(4)-gap]);
+
+% Add legend below last subplot
+legend([h1, h2], {'OpenFAST', 'Own code'}, 'Orientation', 'horizontal', ...
+    'Units', 'normalized', 'Position', [0.35 0.02 0.3 0.04]);
+
+% Save figure
+saveas(gcf, 'Task 12 - AeroForcesComparison_S8.png');
+
+% Save results in a file RESULTS_S% where % corresponds to the sea state number
+results_filename = sprintf('RESULTS_S%d.mat', sea_state);
+save(results_filename, 'RESULTS');
+fprintf('Results saved to %s\n', results_filename);
+
